@@ -7,12 +7,12 @@ function save() {
     const pubkey = pubkeys[i].value;
     config.frequentlyUsedPubkeys.push({ nickname, pubkey });
   }
-  chrome.storage.local.set({ config }, function() {
+  chrome.storage.local.set({ config }, function () {
     // change save button title "Saved!" in 1 seconds
-    const saveButton = document.getElementById('save');
+    const saveButton = document.getElementById("save");
     saveButton.innerHTML = "Saved!";
     saveButton.disabled = true;
-    setTimeout(function() {
+    setTimeout(function () {
       saveButton.innerHTML = "Save";
       saveButton.disabled = false;
     }, 1000);
@@ -20,8 +20,8 @@ function save() {
 }
 
 function restore() {
-  chrome.storage.local.get("config", function({config}) {
-    const frequentlyUsedPubkeys = config.frequentlyUsedPubkeys || [];
+  chrome.storage.local.get("config", function ({ config }) {
+    const frequentlyUsedPubkeys = config?.frequentlyUsedPubkeys || [];
 
     const nicknames = document.getElementsByName("nickname");
     const pubkeys = document.getElementsByName("pubkey");
@@ -37,7 +37,7 @@ function restore() {
   });
 }
 
-document.addEventListener('DOMContentLoaded', function () {
+document.addEventListener("DOMContentLoaded", function () {
   restore();
-  document.getElementById('save').addEventListener('click', save);
+  document.getElementById("save").addEventListener("click", save);
 });
