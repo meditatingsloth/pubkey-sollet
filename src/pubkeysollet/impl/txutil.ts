@@ -1,4 +1,11 @@
-import { Connection, Transaction, VersionedTransaction } from "@solana/web3.js";
+import {
+  AddressLookupTableAccount,
+  AddressLookupTableProgram,
+  Connection,
+  Transaction,
+  VersionedTransaction,
+} from "@solana/web3.js";
+import base58 from "bs58";
 
 // REPLACE THIS WITH YOUR OWN RPC URL
 const RPC_URL = "";
@@ -72,6 +79,23 @@ async function dumpVersionedTransaction(
 
   lines.push(`version: ${transaction.version}`);
 
+  let altAddressesByAccountKey: Map<string, string[]> = new Map();
+  if (connection != null) {
+    for (const lookupTable of message.addressTableLookups) {
+      const account = await connection.getAccountInfo(lookupTable.accountKey);
+      if (account === null) {
+        lines.push(`ALT ${lookupTable.accountKey.toBase58()} not found`);
+        continue;
+      }
+      const table = AddressLookupTableAccount.deserialize(account.data);
+
+      altAddressesByAccountKey.set(
+        lookupTable.accountKey.toBase58(),
+        table.addresses.map((a) => a.toBase58())
+      );
+    }
+  }
+
   // if ALTs are used, we cannot know the loaded pubkeys without fetching them.
   // we would like to avoid fetching them, so we just ALT <ALT ADDRESS>[<INDEX>] notation.
   const staticKeys = message.staticAccountKeys.map((k) => k.toBase58());
@@ -80,10 +104,18 @@ async function dumpVersionedTransaction(
   message.addressTableLookups.forEach((alt) => {
     const altKey = alt.accountKey.toBase58();
     alt.writableIndexes.forEach((i) =>
-      writableKeys.push(`ALT ${altKey}[${i}]`)
+      writableKeys.push(
+        `ALT ${altKey}[${i}]\n        ${
+          altAddressesByAccountKey.get(altKey)?.[i]
+        }`
+      )
     );
     alt.readonlyIndexes.forEach((i) =>
-      readonlyKeys.push(`ALT ${altKey}[${i}]`)
+      readonlyKeys.push(
+        `ALT ${altKey}[${i}]\n        ${
+          altAddressesByAccountKey.get(altKey)?.[i]
+        }`
+      )
     );
   });
   const keys = [...staticKeys, ...writableKeys, ...readonlyKeys];
@@ -111,8 +143,7 @@ async function dumpVersionedTransaction(
     lines.push("");
   });
 
-  if (RPC_URL.length > 0) {
-    const connection = new Connection(RPC_URL);
+  if (connection != null) {
     const latestBlockhash = await connection.getLatestBlockhash();
     transaction.message.recentBlockhash = latestBlockhash.blockhash;
     const result = await connection.simulateTransaction(transaction);
@@ -126,6 +157,24 @@ async function dumpVersionedTransaction(
       lines.push(JSON.stringify(result.value.err));
     }
   }
+
+  lines.push("");
+  lines.push("---");
+  const encodedSigs = encodeURIComponent(
+    JSON.stringify(transaction.signatures.map((s) => base58.encode(s)))
+  );
+  const encodedMessage = encodeURIComponent(
+    Buffer.from(transaction.message.serialize()).toString("base64")
+  );
+  lines.push(
+    `https://explorer.solana.com/tx/inspector?signatures=${encodedSigs}&message=${encodedMessage}`
+  );
+  lines.push("");
+  lines.push(transaction.signatures.map((s) => base58.encode(s)).join("\n"));
+  lines.push("");
+  lines.push(Buffer.from(transaction.serialize()).toString("base64"));
+  lines.push("---");
+  lines.push("");
 
   return lines.join("\n");
 }
